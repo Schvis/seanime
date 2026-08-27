@@ -4,6 +4,8 @@ import fs from "node:fs"
 import path from "node:path"
 
 export type DenshiSettings = {
+    serverMode: "local" | "external"
+    externalServerUrl: string
     minimizeToTray: boolean
     openInBackground: boolean
     openAtLaunch: boolean
@@ -14,6 +16,8 @@ export type DenshiSettings = {
 }
 
 export const DENSHI_SETTINGS_DEFAULTS: DenshiSettings = {
+    serverMode: "local",
+    externalServerUrl: "",
     minimizeToTray: true,
     openInBackground: false,
     openAtLaunch: false,

@@ -95,12 +95,6 @@ func (s *LocalFileStream) LoadPlaybackInfo() (ret *player.PlaybackInfo, err erro
 		_, _ = fr.Seek(0, io.SeekStart)
 
 		id := uuid.New().String()
-		absolutePlaybackPath, err := filepath.Abs(s.localFile.Path)
-		if err != nil {
-			s.playbackInfoErr = fmt.Errorf("failed to resolve absolute playback path: %w", err)
-			return
-		}
-
 		var entryListData *anime.EntryListData
 		if animeCollection, ok := s.manager.animeCollection.Get(); ok {
 			if listEntry, ok := animeCollection.GetListEntryFromAnimeId(s.media.ID); ok {
@@ -112,7 +106,9 @@ func (s *LocalFileStream) LoadPlaybackInfo() (ret *player.PlaybackInfo, err erro
 		playbackInfo := player.PlaybackInfo{
 			ID:                id,
 			PlaybackType:      s.Type(),
-			PlaybackURI:       absolutePlaybackPath,
+			// The player may run on a different machine than the server. Always
+			// use the authenticated stream URL instead of the server filesystem path.
+			PlaybackURI:       streamURL,
 			StreamPath:        s.localFile.Path,
 			MimeType:          s.LoadContentType(),
 			StreamURL:         streamURL,

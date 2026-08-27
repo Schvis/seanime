@@ -22,6 +22,7 @@ import { setupChromiumFlags } from "./chromium-flags"
 import { DENSHI_SETTINGS_DEFAULTS, DenshiSettings, loadDenshiSettings, saveDenshiSettings } from "./denshi-settings"
 import {
     allowedWebviewOrigins,
+    getDesktopServerBaseUrl,
     getLocalServerPort,
     isAllowedLocalEmbedURL,
     isDesktopServerReachable,
@@ -778,6 +779,15 @@ async function launchSeanimeServer(isRestart: boolean): Promise<void> {
     })
 }
 
+async function waitForExternalServer(baseUrl: string): Promise<void> {
+    const deadline = Date.now() + 15000
+    while (Date.now() < deadline) {
+        if (await isDesktopServerReachable(baseUrl)) return
+        await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    throw new Error(`External Seanime server is not reachable at ${baseUrl}`)
+}
+
 async function restartSeanimeServer() {
     if (serverRestartPromise) {
         logger.server.info("Restart already in progress; reusing existing request")
@@ -1315,11 +1325,23 @@ app.whenReady().then(async () => {
     // Create tray
     createTray()
 
-    // Launch server
+    // Launch or connect to server
     try {
-        logStartupEvent("Attempting to launch server")
-        await launchSeanimeServer(false)
-        logStartupEvent("Server launched successfully")
+        if (denshiSettings.serverMode === "external") {
+            logStartupEvent("Attempting to connect to external server", denshiSettings.externalServerUrl)
+            await waitForExternalServer(denshiSettings.externalServerUrl)
+            serverStarted = true
+            if (splashScreen && !splashScreen.isDestroyed()) {
+                splashScreen.close()
+                splashScreen = null
+            }
+            if (!denshiSettings.openInBackground) showMainWindow()
+            logStartupEvent("Connected to external server")
+        } else {
+            logStartupEvent("Attempting to launch server")
+            await launchSeanimeServer(false)
+            logStartupEvent("Server launched successfully")
+        }
         // Check for updates only after server launch and main window setup is successful
         autoUpdater.checkForUpdatesAndNotify()
     }
@@ -1328,6 +1350,13 @@ app.whenReady().then(async () => {
         if (splashScreen && !splashScreen.isDestroyed()) {
             splashScreen.close()
             splashScreen = null
+        }
+
+        if (denshiSettings.serverMode === "external") {
+            serverStarted = true
+            if (!denshiSettings.openInBackground) showMainWindow()
+            logger.startup.warn("External server unavailable; renderer left open for recovery")
+            return
         }
 
         if (crashScreen && !crashScreen.isDestroyed()) {
@@ -1513,7 +1542,28 @@ app.whenReady().then(async () => {
             return { ...denshiSettings }
         })
 
-        ipcMain.handle("denshi:setSettings", (_: Electron.IpcMainInvokeEvent, newSettings: Partial<DenshiSettings>) => {
+        ipcMain.on("denshi:getServerUrl", (event: Electron.IpcMainEvent) => {
+            event.returnValue = denshiSettings.serverMode === "external"
+                ? denshiSettings.externalServerUrl.replace(/\/$/, "")
+                : getDesktopServerBaseUrl()
+        })
+
+        ipcMain.handle("denshi:setSettings", async (_: Electron.IpcMainInvokeEvent, newSettings: Partial<DenshiSettings>) => {
+            if (newSettings.serverMode === "external") {
+                let externalServerUrl = ""
+                try {
+                    const parsed = new URL(newSettings.externalServerUrl || denshiSettings.externalServerUrl)
+                    if (!/^https?:$/.test(parsed.protocol) || !parsed.host) throw new Error("invalid URL")
+                    externalServerUrl = parsed.toString().replace(/\/$/, "")
+                }
+                catch {
+                    throw new Error("External server URL must be valid HTTP or HTTPS URL")
+                }
+                if (!await isDesktopServerReachable(externalServerUrl)) {
+                    throw new Error(`Seanime server is not reachable at ${externalServerUrl}`)
+                }
+                newSettings.externalServerUrl = externalServerUrl
+            }
             denshiSettings = { ...DENSHI_SETTINGS_DEFAULTS, ...denshiSettings, ...newSettings }
             saveDenshiSettings(denshiSettings)
             logger.settings.info("Updated", denshiSettings)

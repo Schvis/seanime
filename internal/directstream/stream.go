@@ -485,6 +485,13 @@ func (m *Manager) listenToPlayerEvents() {
 			}
 
 			if isTerminated {
+				// A client can close while its replacement stream is already
+				// preparing. That old termination event must not unload replacement.
+				if m.preparingClientID != "" && m.currentPlaybackId == "" && key.PlaybackID != "" {
+					m.playbackMu.Unlock()
+					m.Logger.Debug().Str("playbackId", key.PlaybackID).Msg("directstream: Ignoring stale termination event during stream preparation")
+					continue
+				}
 				if key.ClientID != "" && key.ClientID != cs.ClientId() {
 					m.playbackMu.Unlock()
 					continue

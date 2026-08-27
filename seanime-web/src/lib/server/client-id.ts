@@ -27,9 +27,9 @@ function persistClientIdentity() {
 
     try {
         if (inMemoryClientId) {
-            window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, inMemoryClientId)
+            window.sessionStorage.setItem(CLIENT_ID_STORAGE_KEY, inMemoryClientId)
         } else {
-            window.localStorage.removeItem(CLIENT_ID_STORAGE_KEY)
+            window.sessionStorage.removeItem(CLIENT_ID_STORAGE_KEY)
         }
 
         if (inMemoryClientIdProof) {
@@ -54,7 +54,7 @@ function readStoredClientIdentity(): ClientIdentity {
 
     if (typeof window !== "undefined") {
         try {
-            inMemoryClientId = normalizeClientId(window.localStorage.getItem(CLIENT_ID_STORAGE_KEY))
+            inMemoryClientId = normalizeClientId(window.sessionStorage.getItem(CLIENT_ID_STORAGE_KEY))
             inMemoryClientIdProof = normalizeClientId(window.sessionStorage.getItem(CLIENT_ID_PROOF_STORAGE_KEY))
         }
         catch {

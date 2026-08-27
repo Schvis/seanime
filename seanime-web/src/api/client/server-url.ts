@@ -8,6 +8,8 @@ function devOrProd(dev: string, prod: string): string {
 export function getServerBaseUrl(removeProtocol: boolean = false): string {
     if (__isDesktop__) {
         let ret = devOrProd(`http://127.0.0.1:${__DEV_SERVER_PORT}`, "http://127.0.0.1:43211")
+        const configuredServerUrl = typeof window !== "undefined" ? window.electron?.denshiSettings?.getServerUrl?.() : undefined
+        if (configuredServerUrl) ret = configuredServerUrl
         if (removeProtocol) {
             ret = ret.replace("http://", "").replace("https://", "")
         }

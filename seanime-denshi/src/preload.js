@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld(
         denshiSettings: {
             get: () => ipcRenderer.invoke("denshi:getSettings"),
             set: (settings) => ipcRenderer.invoke("denshi:setSettings", settings),
+            getServerUrl: () => ipcRenderer.sendSync("denshi:getServerUrl"),
         },
 
         mpvCore: {

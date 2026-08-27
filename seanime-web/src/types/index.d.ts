@@ -74,6 +74,7 @@ declare global {
             denshiSettings: {
                 get: () => Promise<DenshiSettings>;
                 set: (settings: DenshiSettings) => Promise<DenshiSettings>;
+                getServerUrl: () => string;
             };
             mpvCore: {
                 createTempSubtitle: (filename: string, content: string) => Promise<string>;
@@ -165,6 +166,8 @@ declare global {
     }
 
     interface DenshiSettings {
+        serverMode: "local" | "external";
+        externalServerUrl: string;
         minimizeToTray: boolean;
         openInBackground: boolean;
         openAtLaunch: boolean;

@@ -1,7 +1,10 @@
 import { SettingsCard } from "@/app/(main)/settings/_components/settings-card"
+import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { TextInput } from "@/components/ui/text-input"
 import React from "react"
 import { RiSettings3Fill } from "react-icons/ri"
+import { toast } from "sonner"
 
 export function DenshiSettings() {
 
@@ -28,12 +31,58 @@ export function DenshiSettings() {
         window.electron.denshiSettings.set(newSettings)
     }
 
+    async function saveServerSettings() {
+        if (!settingsRef.current || !window.electron?.denshiSettings) return
+
+        try {
+            const saved = await window.electron.denshiSettings.set(settingsRef.current)
+            settingsRef.current = saved
+            setSettings(saved)
+            toast.success("Server connection saved. Restart Seanime Denshi to apply it.")
+        }
+        catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to save server connection")
+        }
+    }
+
     if (loading || !settings) {
         return null
     }
 
     return (
         <div className="space-y-4">
+            <SettingsCard title="Server connection">
+                <Switch
+                    side="right"
+                    value={settings.serverMode === "external"}
+                    onValueChange={(value) => {
+                        const newSettings = { ...settingsRef.current!, serverMode: value ? "external" as const : "local" as const }
+                        settingsRef.current = newSettings
+                        setSettings(newSettings)
+                    }}
+                    label="Connect to an external server"
+                    help="Use an existing Seanime server instead of starting the bundled local server."
+                />
+                {settings.serverMode === "external" && (
+                    <div className="space-y-3">
+                        <TextInput
+                            label="External server URL"
+                            help="Include http:// or https:// and port when needed. Example: http://192.168.1.20:43211"
+                            placeholder="https://seanime.example.com"
+                            value={settings.externalServerUrl}
+                            onValueChange={(value) => {
+                                const newSettings = { ...settingsRef.current!, externalServerUrl: value.trim() }
+                                settingsRef.current = newSettings
+                                setSettings(newSettings)
+                            }}
+                        />
+                    </div>
+                )}
+                <Button onClick={saveServerSettings} intent="primary-outline">
+                    Save server connection
+                </Button>
+            </SettingsCard>
+
             <SettingsCard title="Window">
                 <Switch
                     side="right"

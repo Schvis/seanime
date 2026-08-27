@@ -9,7 +9,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "sourceMap": true,
-    "downlevelIteration": true,
     "types": [
       "node"
     ]

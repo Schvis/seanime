@@ -100,6 +100,7 @@ function WebsocketManagement() {
     const socketRef = React.useRef<WebSocket | null>(null)
     const clientIdRef = React.useRef<string>("")
     const clientIdProofRef = React.useRef<string>("")
+    const socketGenerationRef = React.useRef(0)
     const connectWebSocketRef = React.useRef<(() => void) | null>(null)
     const clearAllIntervalsRef = React.useRef<(() => void) | null>(null)
     const wasDisconnected = React.useRef<boolean>(false)
@@ -174,6 +175,8 @@ function WebsocketManagement() {
             // Clear existing connection attempts
             clearAllIntervals()
 
+            const generation = ++socketGenerationRef.current
+
             // Close any existing socket
             if (socketRef.current && socketRef.current.readyState !== WebSocket.CLOSED) {
                 try {
@@ -203,6 +206,7 @@ function WebsocketManagement() {
                 }
                 const query = queryParams.toString()
                 socketRef.current = new WebSocket(query ? `${wsUrl}?${query}` : wsUrl)
+                const socket = socketRef.current
 
                 // Reset the last pong timestamp whenever we connect
                 lastPongRef.current = Date.now()
@@ -255,14 +259,24 @@ function WebsocketManagement() {
                 })
 
                 // Add message handler for pong responses
-                socketRef.current?.addEventListener("message", (event) => {
+                socket.addEventListener("message", (event) => {
+                    if (generation !== socketGenerationRef.current || socket !== socketRef.current) return
                     try {
                         const data = JSON.parse(event.data) as { type: string; payload?: any }
                         if (data.type === WSEvents.CLIENT_IDENTITY) {
                             const nextClientId = typeof data.payload?.clientId === "string" ? data.payload.clientId : ""
                             const nextProof = typeof data.payload?.proof === "string" ? data.payload.proof : ""
                             if (nextClientId) {
+                                // Server may issue a new ID when persisted proof is
+                                // expired or invalid. Accept it so future requests use
+                                // the same identity as the active WebSocket.
+                                const currentClientId = clientIdRef.current
                                 setClientIdentity(nextClientId, nextProof)
+                                if (currentClientId && currentClientId !== nextClientId && socket === socketRef.current) {
+                                    // Current socket was authenticated with old ID.
+                                    // Reconnect using newly issued identity.
+                                    socket.close()
+                                }
                             }
                             return
                         }
@@ -278,17 +292,19 @@ function WebsocketManagement() {
                     }
                 })
 
-                socketRef.current?.addEventListener("close", (event) => {
+                socket.addEventListener("close", (event) => {
+                    if (generation !== socketGenerationRef.current || socket !== socketRef.current) return
                     logger("WebsocketProvider").info(`WebSocket connection closed: ${event.code} ${event.reason}`)
                     handleDisconnection()
                 })
 
-                socketRef.current?.addEventListener("error", (event) => {
+                socket.addEventListener("error", (event) => {
+                    if (generation !== socketGenerationRef.current || socket !== socketRef.current) return
                     logger("WebsocketProvider").error("WebSocket encountered an error:", event)
                     reconnectSocket()
                 })
 
-                setSocket(socketRef.current)
+                setSocket(socket)
             }
             catch (e) {
                 logger("WebsocketProvider").error("Failed to create WebSocket connection:", e)
@@ -300,6 +316,7 @@ function WebsocketManagement() {
 
         function handleDisconnection() {
             clearAllIntervals()
+            if (reconnectTimeoutRef.current !== null) return
             setIsConnected(false)
             scheduleReconnect()
         }
@@ -320,6 +337,8 @@ function WebsocketManagement() {
             if (shouldPauseForAuthRef.current) {
                 return
             }
+
+            if (reconnectTimeoutRef.current !== null) return
 
             // Reconnect after a delay with exponential backoff
             setConnectionErrorCount(count => {

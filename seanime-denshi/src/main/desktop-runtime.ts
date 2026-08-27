@@ -58,14 +58,14 @@ export function getDesktopServerBaseUrl(): string {
     return `http://${DESKTOP_SERVER_HOST}:${getDesktopServerPort()}`
 }
 
-export async function isDesktopServerReachable(): Promise<boolean> {
+export async function isDesktopServerReachable(baseUrl: string = getDesktopServerBaseUrl()): Promise<boolean> {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 1000)
     try {
-        const response = await net.fetch(`${getDesktopServerBaseUrl()}/api/v1/status`, {
+        const response = await net.fetch(`${baseUrl}/api/v1/status`, {
             signal: controller.signal,
         })
-        return response.ok
+        return response.ok || response.status === 401 || response.status === 403
     }
     catch {
         return false

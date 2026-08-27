@@ -14,6 +14,7 @@ export function ElectronRestartServerPrompt() {
     type ServerReachability = "unknown" | "reachable" | "unreachable"
 
     const [hasRendered, setHasRendered] = React.useState(false)
+    const [usesExternalServer, setUsesExternalServer] = React.useState(false)
 
     const isConnected = useAtomValue(websocketConnectedAtom)
     const connectionErrorCount = useAtomValue(websocketConnectionErrorCountAtom)
@@ -63,6 +64,8 @@ export function ElectronRestartServerPrompt() {
     React.useEffect(() => {
         (async () => {
             if (window.electron) {
+                const settings = await window.electron.denshiSettings.get()
+                setUsesExternalServer(settings.serverMode === "external")
                 // await window.electron.window.getCurrentWindow() // TODO: Isn't called
                 setHasRendered(true)
             }
@@ -89,6 +92,10 @@ export function ElectronRestartServerPrompt() {
     }, [hasRendered, isConnected, probeServerHealth])
 
     const handleRestart = async () => {
+        if (usesExternalServer) {
+            window.location.reload()
+            return
+        }
         if (import.meta.env.MODE === "development") return toast.warning("Dev mode: Not restarting server")
 
         setHasClickedRestarted(true)
@@ -153,7 +160,9 @@ export function ElectronRestartServerPrompt() {
                 <LuffyError>
                     <div className="space-y-4 flex flex-col items-center">
                         <p className="text-lg max-w-sm">
-                            The background server process has stopped responding. Please restart it to continue.
+                            {usesExternalServer
+                                ? "The external server is not responding. Check the server URL and network connection, then retry."
+                                : "The background server process has stopped responding. Please restart it to continue."}
                         </p>
 
                         <Button
@@ -163,10 +172,12 @@ export function ElectronRestartServerPrompt() {
                             size="lg"
                             className="rounded-full"
                         >
-                            Restart server
+                            {usesExternalServer ? "Retry connection" : "Restart server"}
                         </Button>
                         <p className="text-[--muted] text-sm max-w-xl">
-                            If this message persists after multiple tries, please relaunch the application.
+                            {usesExternalServer
+                                ? "Change external server URL in Denshi settings if the server address moved."
+                                : "If this message persists after multiple tries, please relaunch the application."}
                         </p>
                     </div>
                 </LuffyError>
