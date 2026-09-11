@@ -23,6 +23,7 @@ type Presence struct {
 	hasSent           bool
 	username          string
 	serverUrl         string
+	clientConnFailed  bool
 	lastClientAttempt time.Time
 	mu                sync.RWMutex
 
@@ -37,18 +38,8 @@ type Presence struct {
 // New creates a new Presence instance.
 // If rich presence is enabled, it sets up a new discord rpc client.
 func New(settings *models.DiscordSettings, logger *zerolog.Logger) *Presence {
-	var client *discordrpc_client.Client
-
-	if settings != nil && settings.EnableRichPresence {
-		var err error
-		client, err = discordrpc_client.New(constants.DiscordApplicationId)
-		if err != nil {
-			logger.Error().Err(err).Msg("discordrpc: rich presence enabled but failed to create discord rpc client")
-		}
-	}
-
 	p := &Presence{
-		client:                      client,
+		client:                      nil,
 		settings:                    settings,
 		logger:                      logger,
 		lastAnimeActivityUpdateSent: time.Now().Add(5 * time.Second),
@@ -58,7 +49,7 @@ func New(settings *models.DiscordSettings, logger *zerolog.Logger) *Presence {
 	}
 
 	if settings != nil && settings.EnableRichPresence {
-		p.startEventLoop()
+		p.setClient()
 	}
 
 	return p
@@ -138,6 +129,7 @@ func (p *Presence) SetSettings(settings *models.DiscordSettings) {
 
 	// Close the current client and stop event loop
 	p.Close()
+	p.clientConnFailed = false
 
 	settings.RichPresenceUseMediaTitleStatus = false    // Devnote: Not used anymore, disable
 	settings.RichPresenceShowAniListMediaButton = false // Devnote: Not used anymore, disable
@@ -204,21 +196,19 @@ func (p *Presence) buildButtons() []*discordrpc_client.Button {
 func (p *Presence) setClient() {
 	defer util.HandlePanicInModuleThen("discordrpc/presence/setClient", func() {})
 
-	if p.client == nil {
-		if time.Since(p.lastClientAttempt) < 30*time.Second {
-			return
-		}
-		p.lastClientAttempt = time.Now()
-
-		client, err := discordrpc_client.New(constants.DiscordApplicationId)
-		if err != nil {
-			p.logger.Debug().Err(err).Msg("discordrpc: Rich presence enabled but failed to create local discord rpc client (may be remote/headless)")
-			return
-		}
-		p.client = client
-		p.startEventLoop()
-		p.logger.Debug().Msg("discordrpc: RPC client initialized and event loop started")
+	if p.client != nil || p.clientConnFailed {
+		return
 	}
+
+	client, err := discordrpc_client.New(constants.DiscordApplicationId)
+	if err != nil {
+		p.clientConnFailed = true
+		p.logger.Debug().Err(err).Msg("discordrpc: Local Discord client not found (running headless or remote)")
+		return
+	}
+	p.client = client
+	p.startEventLoop()
+	p.logger.Debug().Msg("discordrpc: RPC client initialized and event loop started")
 }
 
 var isChecking bool

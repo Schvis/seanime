@@ -21,6 +21,7 @@ export type DiscordRpcSettingsAccess = {
 let socket: net.Socket | null = null
 let isConnected = false
 let isConnecting = false
+let connectPromise: Promise<boolean> | null = null
 let pendingActivity: any = null
 let incomingBuffer = Buffer.alloc(0)
 
@@ -69,63 +70,69 @@ function getPossiblePipePaths(): string[] {
     return paths
 }
 
-async function tryConnect(): Promise<boolean> {
-    if (isConnected || isConnecting) return isConnected
+function tryConnect(): Promise<boolean> {
+    if (isConnected) return Promise.resolve(true)
+    if (connectPromise) return connectPromise
 
-    isConnecting = true
-    const pipePaths = getPossiblePipePaths()
+    connectPromise = (async () => {
+        isConnecting = true
+        const pipePaths = getPossiblePipePaths()
 
-    for (const pipePath of pipePaths) {
-        try {
-            const client = await new Promise<net.Socket | null>((resolve) => {
-                let settled = false
-                const s = net.createConnection(pipePath, () => {
-                    if (!settled) {
-                        settled = true
-                        s.setTimeout(0)
-                        resolve(s)
-                    }
+        for (const pipePath of pipePaths) {
+            try {
+                const client = await new Promise<net.Socket | null>((resolve) => {
+                    let settled = false
+                    const s = net.createConnection(pipePath, () => {
+                        if (!settled) {
+                            settled = true
+                            s.setTimeout(0)
+                            resolve(s)
+                        }
+                    })
+
+                    s.once("error", () => {
+                        if (!settled) {
+                            settled = true
+                            s.destroy()
+                            resolve(null)
+                        }
+                    })
+
+                    s.setTimeout(1500, () => {
+                        if (!settled) {
+                            settled = true
+                            s.destroy()
+                            resolve(null)
+                        }
+                    })
                 })
 
-                s.once("error", () => {
-                    if (!settled) {
-                        settled = true
-                        s.destroy()
-                        resolve(null)
-                    }
-                })
+                if (client) {
+                    socket = client
+                    setupSocketListeners(socket)
 
-                s.setTimeout(1500, () => {
-                    if (!settled) {
-                        settled = true
-                        s.destroy()
-                        resolve(null)
-                    }
-                })
-            })
-
-            if (client) {
-                socket = client
-                setupSocketListeners(socket)
-
-                // Send Handshake
-                const handshake = encodePacket(OP_HANDSHAKE, {
-                    v: 1,
-                    client_id: DISCORD_APP_ID,
-                })
-                socket.write(handshake)
-                log.info("[DiscordRPC] Connected to Discord pipe at", pipePath)
-                isConnecting = false
-                return true
+                    // Send Handshake
+                    const handshake = encodePacket(OP_HANDSHAKE, {
+                        v: 1,
+                        client_id: DISCORD_APP_ID,
+                    })
+                    socket.write(handshake)
+                    log.info("[DiscordRPC] Connected to Discord pipe at", pipePath)
+                    return true
+                }
+            }
+            catch {
+                // Continue trying next path
             }
         }
-        catch {
-            // Continue trying next path
-        }
-    }
 
-    isConnecting = false
-    return false
+        isConnecting = false
+        return false
+    })().finally(() => {
+        connectPromise = null
+    })
+
+    return connectPromise
 }
 
 function setupSocketListeners(s: net.Socket): void {
@@ -171,8 +178,16 @@ function handleSocketMessage(opcode: number, message: any): void {
         if (message.evt === "READY") {
             log.info("[DiscordRPC] Client ready for activity updates")
             isConnected = true
+            isConnecting = false
             if (pendingActivity) {
                 sendActivityPacket(pendingActivity)
+            }
+        }
+        else if (message.cmd === "SET_ACTIVITY") {
+            if (message.evt === "ERROR") {
+                log.warn("[DiscordRPC] Discord rejected activity:", message.data?.message || message.data)
+            } else {
+                log.info("[DiscordRPC] Discord presence updated")
             }
         }
         else if (message.evt === "ERROR") {
@@ -262,6 +277,31 @@ export function setDiscordActivity(activity: any, settingsAccess: DiscordRpcSett
 
         if (act.buttons.length === 0) {
             delete act.buttons
+        }
+    }
+
+    // Clean assets: Discord rejects empty string small_image or large_image
+    if (act.assets) {
+        if (!act.assets.large_image) {
+            delete act.assets.large_image
+            delete act.assets.large_text
+            delete act.assets.large_url
+        }
+        if (!act.assets.small_image) {
+            delete act.assets.small_image
+            delete act.assets.small_text
+            delete act.assets.small_url
+        }
+        if (Object.keys(act.assets).length === 0) {
+            delete act.assets
+        }
+    }
+
+    if (act.timestamps) {
+        if (!act.timestamps.start) delete act.timestamps.start
+        if (!act.timestamps.end) delete act.timestamps.end
+        if (Object.keys(act.timestamps).length === 0) {
+            delete act.timestamps
         }
     }
 
