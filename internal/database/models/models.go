@@ -257,13 +257,15 @@ type ListSyncSettings struct {
 }
 
 type DiscordSettings struct {
-	EnableRichPresence                      bool `gorm:"column:enable_rich_presence" json:"enableRichPresence"`
-	EnableAnimeRichPresence                 bool `gorm:"column:enable_anime_rich_presence" json:"enableAnimeRichPresence"`
-	EnableMangaRichPresence                 bool `gorm:"column:enable_manga_rich_presence" json:"enableMangaRichPresence"`
-	RichPresenceHideSeanimeRepositoryButton bool `gorm:"column:rich_presence_hide_seanime_repository_button" json:"richPresenceHideSeanimeRepositoryButton"`
-	RichPresenceShowAniListMediaButton      bool `gorm:"column:rich_presence_show_anilist_media_button" json:"richPresenceShowAniListMediaButton"`
-	RichPresenceShowAniListProfileButton    bool `gorm:"column:rich_presence_show_anilist_profile_button" json:"richPresenceShowAniListProfileButton"`
-	RichPresenceUseMediaTitleStatus         bool `gorm:"column:rich_presence_use_media_title_status;default:true" json:"richPresenceUseMediaTitleStatus"`
+	EnableRichPresence                      bool   `gorm:"column:enable_rich_presence" json:"enableRichPresence"`
+	EnableAnimeRichPresence                 bool   `gorm:"column:enable_anime_rich_presence" json:"enableAnimeRichPresence"`
+	EnableMangaRichPresence                 bool   `gorm:"column:enable_manga_rich_presence" json:"enableMangaRichPresence"`
+	RichPresenceHideSeanimeRepositoryButton bool   `gorm:"column:rich_presence_hide_seanime_repository_button" json:"richPresenceHideSeanimeRepositoryButton"`
+	RichPresenceShowAniListMediaButton      bool   `gorm:"column:rich_presence_show_anilist_media_button" json:"richPresenceShowAniListMediaButton"`
+	RichPresenceShowAniListProfileButton    bool   `gorm:"column:rich_presence_show_anilist_profile_button" json:"richPresenceShowAniListProfileButton"`
+	RichPresenceUseMediaTitleStatus         bool   `gorm:"column:rich_presence_use_media_title_status;default:true" json:"richPresenceUseMediaTitleStatus"`
+	RichPresenceShowServerUrlButton         bool   `gorm:"column:rich_presence_show_server_url_button" json:"richPresenceShowServerUrlButton"`
+	RichPresenceServerUrl                   string `gorm:"column:rich_presence_server_url" json:"richPresenceServerUrl"`
 }
 
 type NotificationSettings struct {

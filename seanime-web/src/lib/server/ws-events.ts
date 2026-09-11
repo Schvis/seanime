@@ -78,6 +78,8 @@ export const enum WSEvents {
     NAKAMA_WATCH_PARTY_CHAT_MESSAGE = "nakama-watch-party-chat-message",
     SHOW_INDEFINITE_LOADER = "show-indefinite-loader",
     HIDE_INDEFINITE_LOADER = "hide-indefinite-loader",
+    DISCORD_PRESENCE_UPDATED = "discord-presence-updated",
+    DISCORD_PRESENCE_CLEARED = "discord-presence-cleared",
     NAKAMA_ONLINE_STREAM_EVENT = "nakama-online-stream-event",
     NAKAMA_ONLINE_STREAM_CLIENT_EVENT = "nakama-online-stream-client-event",
     PLAYLIST = "playlist",

@@ -76,6 +76,10 @@ declare global {
                 set: (settings: DenshiSettings) => Promise<DenshiSettings>;
                 getServerUrl: () => string;
             };
+            discordRpc?: {
+                setActivity: (activity: any) => Promise<boolean>;
+                clearActivity: () => Promise<boolean>;
+            };
             mpvCore: {
                 createTempSubtitle: (filename: string, content: string) => Promise<string>;
                 writeConfigFile: (content: string) => Promise<string | null>;

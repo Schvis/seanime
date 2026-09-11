@@ -90,6 +90,10 @@ const (
 	AnilistRateLimit     = "anilist-rate-limit"
 	ClientIdentity       = "client-identity"
 
+	// Discord Rich Presence events
+	DiscordPresenceUpdated = "discord-presence-updated"
+	DiscordPresenceCleared = "discord-presence-cleared"
+
 	// Nakama events
 	NakamaHostStarted          = "nakama-host-started"
 	NakamaHostStopped          = "nakama-host-stopped"

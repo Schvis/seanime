@@ -76,6 +76,9 @@ func (a *App) initModulesOnce() {
 	// +---------------------+
 
 	a.DiscordPresence = discordrpc_presence.New(nil, a.Logger)
+	if a.Config.Server.ExternalURL != "" {
+		a.DiscordPresence.SetServerUrl(a.Config.Server.ExternalURL)
+	}
 	a.AddCleanupFunction(func() {
 		a.DiscordPresence.Close()
 	})
@@ -703,6 +706,9 @@ func (a *App) InitOrRefreshModules() {
 	// +---------------------+
 
 	if settings.Discord != nil && a.DiscordPresence != nil {
+		if a.Config.Server.ExternalURL != "" {
+			a.DiscordPresence.SetServerUrl(a.Config.Server.ExternalURL)
+		}
 		go a.DiscordPresence.SetSettings(settings.Discord)
 	}
 

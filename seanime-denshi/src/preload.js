@@ -112,6 +112,12 @@ contextBridge.exposeInMainWorld(
             getServerUrl: () => ipcRenderer.sendSync("denshi:getServerUrl"),
         },
 
+        // Discord Rich Presence
+        discordRpc: {
+            setActivity: (activity) => ipcRenderer.invoke("discord-rpc:setActivity", activity),
+            clearActivity: () => ipcRenderer.invoke("discord-rpc:clearActivity"),
+        },
+
         mpvCore: {
             createTempSubtitle: (filename, content) => ipcRenderer.invoke("mpvcore:create-temp-subtitle", filename, content),
             writeConfigFile: (content) => ipcRenderer.invoke("mpvcore:write-config-file", content),

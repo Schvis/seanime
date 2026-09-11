@@ -3984,6 +3984,8 @@ export type Models_DiscordSettings = {
     richPresenceShowAniListMediaButton: boolean
     richPresenceShowAniListProfileButton: boolean
     richPresenceUseMediaTitleStatus: boolean
+    richPresenceShowServerUrlButton: boolean
+    richPresenceServerUrl: string
 }
 
 /**

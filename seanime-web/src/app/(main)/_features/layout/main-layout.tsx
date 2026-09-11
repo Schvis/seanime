@@ -26,6 +26,7 @@ import { useExtensionListener } from "@/app/(main)/_listeners/extensions.listene
 import { useExternalPlayerLinkListener } from "@/app/(main)/_listeners/external-player-link.listeners"
 import { useMangaListener } from "@/app/(main)/_listeners/manga.listeners"
 import { useMiscEventListeners } from "@/app/(main)/_listeners/misc-events.listeners"
+import { useDiscordRpcListener } from "@/app/(main)/_listeners/discord-rpc.listeners"
 import { useSyncListener } from "@/app/(main)/_listeners/sync.listeners"
 import { useTorrentStreamListener } from "@/app/(main)/entry/_containers/torrent-stream/_lib/handle-torrent-stream"
 import { PlaybackPlayPill } from "@/app/(main)/entry/_containers/torrent-stream/playback-play-pill"
@@ -119,6 +120,7 @@ function Loader() {
     useAutoDownloaderItemListener()
     useAnimeCollectionListener()
     useMiscEventListeners()
+    useDiscordRpcListener()
     useExtensionListener()
     useMangaListener()
     useExternalPlayerLinkListener()

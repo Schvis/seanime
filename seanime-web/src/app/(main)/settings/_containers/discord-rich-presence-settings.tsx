@@ -18,6 +18,7 @@ export function DiscordRichPresenceSettings(props: DiscordRichPresenceSettingsPr
     const { watch } = useFormContext()
 
     const enableRichPresence = watch("enableRichPresence")
+    const richPresenceShowServerUrlButton = watch("richPresenceShowServerUrlButton")
 
     return (
         <>
@@ -66,6 +67,22 @@ export function DiscordRichPresenceSettings(props: DiscordRichPresenceSettingsPr
                     label="Show AniList Profile Button"
                     help="Show a button to open your profile page on AniList."
                 />
+
+                <Field.Switch
+                    side="right"
+                    name="richPresenceShowServerUrlButton"
+                    label="Show Server URL Button"
+                    help="Show a button in Discord Rich Presence linking to your server URL."
+                />
+
+                {richPresenceShowServerUrlButton && (
+                    <Field.Text
+                        name="richPresenceServerUrl"
+                        label="Server URL"
+                        placeholder="https://seanime.example.com"
+                        help="The URL that the button will open. If left empty, the external server address will be used."
+                    />
+                )}
 
                 {/*<Field.Switch*/}
                 {/*    side="right"*/}

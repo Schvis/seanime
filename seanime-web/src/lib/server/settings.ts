@@ -92,6 +92,8 @@ export const settingsSchema = z.object({
     richPresenceShowAniListMediaButton: z.boolean().optional().default(false),
     richPresenceShowAniListProfileButton: z.boolean().optional().default(false),
     richPresenceUseMediaTitleStatus: z.boolean().optional().default(true),
+    richPresenceShowServerUrlButton: z.boolean().optional().default(false),
+    richPresenceServerUrl: z.string().optional().default(""),
     disableNotifications: z.boolean().optional().default(false),
     disableAutoDownloaderNotifications: z.boolean().optional().default(false),
     disableAutoScannerNotifications: z.boolean().optional().default(false),
@@ -225,6 +227,8 @@ export const getDefaultSettings = (data: z.infer<typeof gettingStartedSchema>): 
         richPresenceShowAniListMediaButton: false,
         richPresenceShowAniListProfileButton: false,
         richPresenceUseMediaTitleStatus: true,
+        richPresenceShowServerUrlButton: false,
+        richPresenceServerUrl: "",
     },
     torrent: {
         defaultTorrentClient: data.defaultTorrentClient,

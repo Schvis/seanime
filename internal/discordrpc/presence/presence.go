@@ -7,6 +7,7 @@ import (
 	"seanime/internal/constants"
 	"seanime/internal/database/models"
 	discordrpc_client "seanime/internal/discordrpc/client"
+	"seanime/internal/events"
 	"seanime/internal/hook"
 	"seanime/internal/util"
 	"sync"
@@ -16,12 +17,14 @@ import (
 )
 
 type Presence struct {
-	client   *discordrpc_client.Client
-	settings *models.DiscordSettings
-	logger   *zerolog.Logger
-	hasSent  bool
-	username string
-	mu       sync.RWMutex
+	client            *discordrpc_client.Client
+	settings          *models.DiscordSettings
+	logger            *zerolog.Logger
+	hasSent           bool
+	username          string
+	serverUrl         string
+	lastClientAttempt time.Time
+	mu                sync.RWMutex
 
 	animeActivity               *AnimeActivity
 	lastAnimeActivityUpdateSent time.Time
@@ -115,13 +118,16 @@ func (p *Presence) close() {
 		p.cancelFunc = nil
 	}
 
-	if p.client == nil {
-		return
+	if p.client != nil {
+		p.client.Close()
+		p.client = nil
 	}
-	p.client.Close()
-	p.client = nil
 
 	_ = hook.GlobalHookManager.OnDiscordPresenceClientClosed().Trigger(&DiscordPresenceClientClosedEvent{})
+
+	if events.GlobalWSEventManager != nil {
+		events.GlobalWSEventManager.SendEvent(events.DiscordPresenceCleared, nil)
+	}
 }
 
 func (p *Presence) SetSettings(settings *models.DiscordSettings) {
@@ -153,15 +159,60 @@ func (p *Presence) SetUsername(username string) {
 	p.username = username
 }
 
+func (p *Presence) SetServerUrl(serverUrl string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.serverUrl = serverUrl
+}
+
+func (p *Presence) buildButtons() []*discordrpc_client.Button {
+	buttons := make([]*discordrpc_client.Button, 0)
+
+	if p.settings.RichPresenceShowAniListProfileButton && p.username != "" {
+		buttons = append(buttons, &discordrpc_client.Button{
+			Label: "View Profile",
+			Url:   fmt.Sprintf("https://anilist.co/user/%s", p.username),
+		})
+	}
+
+	if p.settings.RichPresenceShowServerUrlButton {
+		url := p.settings.RichPresenceServerUrl
+		if url == "" {
+			url = p.serverUrl
+		}
+		if url != "" && len(buttons) < 2 {
+			buttons = append(buttons, &discordrpc_client.Button{
+				Label: "Open Seanime",
+				Url:   url,
+			})
+		}
+	}
+
+	if !(p.settings.RichPresenceHideSeanimeRepositoryButton || len(buttons) >= 2) {
+		buttons = append(buttons, &discordrpc_client.Button{
+			Label: "Seanime",
+			Url:   "https://seanime.app",
+		})
+	}
+
+	return buttons
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func (p *Presence) setClient() {
 	defer util.HandlePanicInModuleThen("discordrpc/presence/setClient", func() {})
 
 	if p.client == nil {
+		if time.Since(p.lastClientAttempt) < 30*time.Second {
+			return
+		}
+		p.lastClientAttempt = time.Now()
+
 		client, err := discordrpc_client.New(constants.DiscordApplicationId)
 		if err != nil {
-			p.logger.Error().Err(err).Msg("discordrpc: Rich presence enabled but failed to create discord rpc client")
+			p.logger.Debug().Err(err).Msg("discordrpc: Rich presence enabled but failed to create local discord rpc client (may be remote/headless)")
 			return
 		}
 		p.client = client
@@ -197,14 +248,9 @@ func (p *Presence) check() (proceed bool) {
 		return false
 	}
 
-	// If the client is nil, create a new client
+	// If the client is nil, try to create a new client
 	if p.client == nil {
 		p.setClient()
-	}
-
-	// If the client is still nil, return false
-	if p.client == nil {
-		return false
 	}
 
 	// If this is the first time setting the presence, return true
@@ -362,21 +408,7 @@ func (p *Presence) SetAnimeActivity(a *AnimeActivity) {
 		event.EndTimestamp = nil
 	}
 
-	activity.Buttons = make([]*discordrpc_client.Button, 0)
-
-	if p.settings.RichPresenceShowAniListProfileButton {
-		activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-			Label: "View Profile",
-			Url:   fmt.Sprintf("https://anilist.co/user/%s", p.username),
-		})
-	}
-
-	if !(p.settings.RichPresenceHideSeanimeRepositoryButton || len(activity.Buttons) > 1) {
-		activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-			Label: "Seanime",
-			Url:   "https://seanime.app",
-		})
-	}
+	activity.Buttons = p.buildButtons()
 
 	// p.logger.Debug().Msgf("discordrpc: Setting anime activity: %s", a.Title)
 
@@ -439,13 +471,19 @@ func (p *Presence) SetAnimeActivity(a *AnimeActivity) {
 	activity.Instance = event.Instance
 	activity.Type = event.Type
 
-	select {
-	case p.eventQueue <- func() {
-		_ = p.client.SetActivity(activity)
-		// p.logger.Debug().Int("progress", a.Progress).Int("duration", a.Duration).Msgf("discordrpc: Anime activity set for %s", a.Title)
-	}:
-	default:
-		//p.logger.Error().Msgf("discordrpc: event queue is full for %s", a.Title)
+	if p.client != nil {
+		select {
+		case p.eventQueue <- func() {
+			_ = p.client.SetActivity(activity)
+			// p.logger.Debug().Int("progress", a.Progress).Int("duration", a.Duration).Msgf("discordrpc: Anime activity set for %s", a.Title)
+		}:
+		default:
+			//p.logger.Error().Msgf("discordrpc: event queue is full for %s", a.Title)
+		}
+	}
+
+	if events.GlobalWSEventManager != nil {
+		events.GlobalWSEventManager.SendEvent(events.DiscordPresenceUpdated, activity)
 	}
 }
 
@@ -548,26 +586,18 @@ func (p *Presence) LegacySetAnimeActivity(a *LegacyAnimeActivity) {
 	activity.Assets.LargeURL = fmt.Sprintf("https://anilist.co/anime/%d", a.ID)
 	activity.Timestamps.Start.Time = time.Now()
 	activity.Timestamps.End = nil
-	activity.Buttons = make([]*discordrpc_client.Button, 0)
-
-	if p.settings.RichPresenceShowAniListProfileButton {
-		activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-			Label: "View Profile",
-			Url:   fmt.Sprintf("https://anilist.co/user/%s", p.username),
-		})
-	}
-
-	if !(p.settings.RichPresenceHideSeanimeRepositoryButton || len(activity.Buttons) > 1) {
-		activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-			Label: "Seanime",
-			Url:   "https://seanime.app",
-		})
-	}
+	activity.Buttons = p.buildButtons()
 
 	// p.logger.Debug().Msgf("discordrpc: Setting anime activity: %s", a.Title)
 
-	p.eventQueue <- func() {
-		_ = p.client.SetActivity(activity)
+	if p.client != nil {
+		p.eventQueue <- func() {
+			_ = p.client.SetActivity(activity)
+		}
+	}
+
+	if events.GlobalWSEventManager != nil {
+		events.GlobalWSEventManager.SendEvent(events.DiscordPresenceUpdated, activity)
 	}
 }
 
@@ -610,21 +640,7 @@ func (p *Presence) SetMangaActivity(a *MangaActivity) {
 	event.StartTimestamp = new(now.Unix())
 	activity.Timestamps.End = nil
 	event.EndTimestamp = nil
-	activity.Buttons = make([]*discordrpc_client.Button, 0)
-
-	if p.settings.RichPresenceShowAniListProfileButton && p.username != "" {
-		activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-			Label: "View Profile",
-			Url:   fmt.Sprintf("https://anilist.co/user/%s", p.username),
-		})
-	}
-
-	if !(p.settings.RichPresenceHideSeanimeRepositoryButton || len(activity.Buttons) > 1) {
-		activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-			Label: "Seanime",
-			Url:   "https://seanime.app",
-		})
-	}
+	activity.Buttons = p.buildButtons()
 
 	event.MangaActivity = a
 	event.Name = activity.Name
@@ -685,8 +701,14 @@ func (p *Presence) SetMangaActivity(a *MangaActivity) {
 
 	p.logger.Debug().Msgf("discordrpc: Setting manga activity: %s", a.Title)
 
-	p.eventQueue <- func() {
-		_ = p.client.SetActivity(activity)
+	if p.client != nil {
+		p.eventQueue <- func() {
+			_ = p.client.SetActivity(activity)
+		}
+	}
+
+	if events.GlobalWSEventManager != nil {
+		events.GlobalWSEventManager.SendEvent(events.DiscordPresenceUpdated, activity)
 	}
 }
 
@@ -738,19 +760,7 @@ func (p *Presence) SetCustomActivity(a *CustomActivity) {
 	if len(a.Buttons) > 0 {
 		activity.Buttons = a.Buttons
 	} else {
-		activity.Buttons = make([]*discordrpc_client.Button, 0)
-		if p.settings.RichPresenceShowAniListProfileButton && p.username != "" {
-			activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-				Label: "View Profile",
-				Url:   fmt.Sprintf("https://anilist.co/user/%s", p.username),
-			})
-		}
-		if !(p.settings.RichPresenceHideSeanimeRepositoryButton || len(activity.Buttons) > 1) {
-			activity.Buttons = append(activity.Buttons, &discordrpc_client.Button{
-				Label: "Seanime",
-				Url:   "https://seanime.app",
-			})
-		}
+		activity.Buttons = p.buildButtons()
 	}
 
 	// Handle Timestamps
@@ -792,7 +802,13 @@ func (p *Presence) SetCustomActivity(a *CustomActivity) {
 
 	p.logger.Debug().Msgf("discordrpc: Setting custom activity: %s", a.Details)
 
-	p.eventQueue <- func() {
-		_ = p.client.SetActivity(activity)
+	if p.client != nil {
+		p.eventQueue <- func() {
+			_ = p.client.SetActivity(activity)
+		}
+	}
+
+	if events.GlobalWSEventManager != nil {
+		events.GlobalWSEventManager.SendEvent(events.DiscordPresenceUpdated, activity)
 	}
 }

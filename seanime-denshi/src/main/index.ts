@@ -31,6 +31,7 @@ import {
 } from "./desktop-runtime"
 import { log, setupLogging } from "./logging"
 import { disposeMpvCore, initializeMpvCore, prepareMpvCore, registerMpvCoreIpc } from "./mpv-core"
+import { disposeDiscordRpc, registerDiscordRpcIpc } from "./discord-rpc"
 
 let stripAnsi: ((str: string) => string) | undefined
 import("strip-ansi").then(module => {
@@ -1127,6 +1128,7 @@ function cleanupAndExit() {
 
     saveMainWindowState()
     disposeMpvCore()
+    disposeDiscordRpc()
 
     // Clean up cast
     if (__CAST_ENABLED__ && castSender) {
@@ -1312,6 +1314,7 @@ app.whenReady().then(async () => {
     })
 
     registerMpvCoreIpc(mpvCoreSettings)
+    registerDiscordRpcIpc({ get: () => denshiSettings })
     registerIpcHandlers()
 
     setupAppProtocol()
