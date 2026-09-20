@@ -325,6 +325,10 @@ func (s *BaseStream) beginSubtitleSeek(seekTime float64) subtitleRequest {
 		request.playbackID = s.playbackInfo.ID
 	}
 
+	if s.subtitleEventCache != nil {
+		s.subtitleEventCache.Clear()
+	}
+
 	s.activeSubtitleStreams.Range(func(_ string, value *SubtitleStream) bool {
 		value.Stop(false)
 		return true

@@ -1698,6 +1698,49 @@ func TestReadPacket_Comprehensive(t *testing.T) {
 		_ = packet
 	})
 
+	t.Run("Seeked reader retains target cluster", func(t *testing.T) {
+		mockFile, err := createMockMatroskaFileWithMultipleClusters()
+		if err != nil {
+			t.Fatalf("Failed to create mock matroska file: %v", err)
+		}
+
+		cluster2Offset := bytes.LastIndex(mockFile, []byte{0x1F, 0x43, 0xB6, 0x75})
+		if cluster2Offset == -1 {
+			t.Fatalf("Cluster 2 not found in mock file")
+		}
+
+		reader := bytes.NewReader(mockFile)
+		_, err = reader.Seek(int64(cluster2Offset), io.SeekStart)
+		if err != nil {
+			t.Fatalf("Failed to seek to cluster 2: %v", err)
+		}
+
+		parser, err := NewMatroskaParser(reader, false)
+		if err != nil {
+			t.Fatalf("NewMatroskaParser() failed: %v", err)
+		}
+
+		// Parser should have rewound to cluster2Offset and preserved EBML reader pos
+		if parser.reader.Position() != int64(cluster2Offset) {
+			t.Errorf("Expected reader pos %d, got %d", cluster2Offset, parser.reader.Position())
+		}
+
+		// ReadPacket should read the packet in Cluster 2, not skip past it
+		packet, err := parser.ReadPacket()
+		if err != nil {
+			t.Fatalf("ReadPacket() failed: %v", err)
+		}
+		if packet == nil {
+			t.Fatalf("Expected non-nil packet from cluster 2")
+		}
+		if string(packet.Data) != "frame2" {
+			t.Errorf("Expected packet data 'frame2', got %q", string(packet.Data))
+		}
+		if packet.StartTime != 1000*1000000 {
+			t.Errorf("Expected timestamp 1000000000, got %d", packet.StartTime)
+		}
+	})
+
 	// Unknown child inside cluster should be skipped gracefully
 	t.Run("Cluster with unknown child skipped", func(t *testing.T) {
 		buf := new(bytes.Buffer)

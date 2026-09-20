@@ -133,6 +133,27 @@ func TestBeginSubtitleSeekCancelsPreviousGeneration(t *testing.T) {
 	require.Equal(t, request.generation, stream.subtitleGeneration.Load())
 }
 
+func TestBeginSubtitleSeekClearsSubtitleEventCache(t *testing.T) {
+	cache := result.NewMap[string, *mkvparser.SubtitleEvent]()
+	cache.Set("event1", &mkvparser.SubtitleEvent{Text: "test"})
+
+	stream := &BaseStream{
+		logger:                util.NewLogger(),
+		playbackInfo:          &player.PlaybackInfo{ID: "playback-1"},
+		activeSubtitleStreams: result.NewMap[string, *SubtitleStream](),
+		subtitleEventCache:    cache,
+	}
+
+	stream.beginSubtitleSeek(50.0)
+
+	count := 0
+	cache.Range(func(_ string, _ *mkvparser.SubtitleEvent) bool {
+		count++
+		return true
+	})
+	require.Equal(t, 0, count, "subtitleEventCache should be cleared on seek")
+}
+
 func TestStartSubtitleStreamPRejectsStaleGeneration(t *testing.T) {
 	reader := &trackingReadSeekCloser{}
 	stream := &BaseStream{

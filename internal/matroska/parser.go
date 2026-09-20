@@ -165,6 +165,13 @@ type SegmentElement struct {
 //	    log.Fatal(err)
 //	}
 func NewMatroskaParser(r io.ReadSeeker, noSeeking bool, elementsToParse ...uint32) (*MatroskaParser, error) {
+	var initialPos int64
+	if r != nil {
+		if cur, err := r.Seek(0, io.SeekCurrent); err == nil {
+			initialPos = cur
+		}
+	}
+
 	parser := &MatroskaParser{
 		reader:          NewEBMLReader(r),
 		noSeeking:       noSeeking,
@@ -187,6 +194,12 @@ func NewMatroskaParser(r io.ReadSeeker, noSeeking bool, elementsToParse ...uint3
 	// If we failed to parse header or segment, we might be positioned at a cluster offset
 	// Initialize with minimal defaults to allow packet reading from current position
 	if headerErr != nil || segmentErr != nil {
+		if r != nil {
+			if _, err := r.Seek(initialPos, io.SeekStart); err == nil {
+				parser.reader = NewEBMLReader(r)
+			}
+		}
+
 		// Initialize with defaults for cluster-only parsing
 		parser.header = &EBMLHeader{
 			DocType:        "matroska",
@@ -1892,7 +1905,7 @@ func (mp *MatroskaParser) parseSimpleBlock(size uint64) (*Packet, error) {
 			}
 		}
 
-		scaledTime := (mp.clusterTimestamp + uint64(timestamp)) * mp.fileInfo.TimecodeScale
+		scaledTime := uint64(int64(mp.clusterTimestamp) + int64(timestamp)) * mp.fileInfo.TimecodeScale
 		packet := &Packet{
 			Track:     uint8(trackNum),
 			StartTime: scaledTime,
@@ -1990,7 +2003,7 @@ func (mp *MatroskaParser) parseSimpleBlock(size uint64) (*Packet, error) {
 		}
 	}
 
-	scaledTime := (mp.clusterTimestamp + uint64(timestamp)) * mp.fileInfo.TimecodeScale
+	scaledTime := uint64(int64(mp.clusterTimestamp) + int64(timestamp)) * mp.fileInfo.TimecodeScale
 	packet := &Packet{
 		Track:     uint8(trackNum),
 		StartTime: scaledTime,
@@ -2072,7 +2085,7 @@ func (mp *MatroskaParser) parseBlockGroup(size uint64) (*Packet, error) {
 			timestamp := int16(blockData[trackBytes])<<8 | int16(blockData[trackBytes+1])
 			frameData := blockData[trackBytes+3:] // Skip flags byte
 
-			scaledTime := (mp.clusterTimestamp + uint64(timestamp)) * mp.fileInfo.TimecodeScale
+			scaledTime := uint64(int64(mp.clusterTimestamp) + int64(timestamp)) * mp.fileInfo.TimecodeScale
 			packet = &Packet{
 				Track:     uint8(trackNum),
 				StartTime: scaledTime,

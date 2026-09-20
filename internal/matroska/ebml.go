@@ -519,7 +519,13 @@ type EBMLReader struct {
 //
 //	reader := NewEBMLReader(file)
 func NewEBMLReader(r io.ReadSeeker) *EBMLReader {
-	return &EBMLReader{r: r}
+	var pos int64
+	if r != nil {
+		if cur, err := r.Seek(0, io.SeekCurrent); err == nil {
+			pos = cur
+		}
+	}
+	return &EBMLReader{r: r, pos: pos}
 }
 
 // ReadVInt reads a variable-length integer from the stream.
@@ -932,14 +938,33 @@ type EBMLHeader struct {
 //   - A pointer to the parsed EBMLHeader.
 //   - An error if reading the header fails or if the first element is not an EBML header.
 func (er *EBMLReader) ReadEBMLHeader() (*EBMLHeader, error) {
-	// Read EBML header element
-	element, err := er.ReadElement()
+	// Read EBML header element header
+	id, size, err := er.ReadElementHeader()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read EBML header: %w", err)
 	}
 
-	if element.ID != IDEBMLHeader {
-		return nil, fmt.Errorf("expected EBML header, got ID 0x%X", element.ID)
+	if id != IDEBMLHeader {
+		return nil, fmt.Errorf("expected EBML header, got ID 0x%X", id)
+	}
+
+	if size > 256*1024*1024 {
+		return nil, fmt.Errorf("element size %d is too large", size)
+	}
+
+	data := make([]byte, size)
+	if size > 0 {
+		n, errReadFull := io.ReadFull(er.r, data)
+		if errReadFull != nil {
+			return nil, fmt.Errorf("failed to read element data: %w", errReadFull)
+		}
+		er.pos += int64(n)
+	}
+
+	element := &EBMLElement{
+		ID:   id,
+		Size: size,
+		Data: data,
 	}
 
 	header := &EBMLHeader{}
