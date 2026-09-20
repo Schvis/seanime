@@ -6,7 +6,7 @@ testdata/
 
 .*/
 !.github/
-.github/*
+
 !.github/ISSUE_TEMPLATE
 !.github/scripts
 !.github/pull_request_template.md

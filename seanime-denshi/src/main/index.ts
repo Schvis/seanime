@@ -220,7 +220,7 @@ setupLogging()
 setupChromiumFlags()
 const _development = process.env.NODE_ENV === "development"
 const _isRsbuildFrontend = true
-const DEFAULT_UPDATE_FEED_URL = "https://github.com/5rahim/seanime/releases/latest/download"
+const DEFAULT_UPDATE_FEED_URL = "https://github.com/Schvis/seanime/releases/latest/download"
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Custom protocol for web content
@@ -1158,37 +1158,6 @@ function cleanupAndExit() {
 // Initialization
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// returns true if github is ok OR url is unreachable
-// returns false if github is down and fallback should be used
-async function fetchGithubStatus() {
-    try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 5000)
-
-        const response = await net.fetch("https://seanime.app/api/github-status", {
-            signal: controller.signal,
-        })
-        clearTimeout(timeoutId)
-
-        if (!response.ok) {
-            return { ok: true, fallback: "" }
-        }
-
-        const data = await response.json()
-
-        // url is reachable, status is "down"
-        if (data.status === "down") {
-            logger.updater.warn("Using fallback update channel", { channel: data.fallback, reason: data.description })
-            return { ok: false, fallback: data.fallback || "seanime" }
-        }
-
-        return { ok: true, fallback: "" }
-    }
-    catch (err) {
-        return { ok: true, fallback: "" }
-    }
-}
-
 // Initialize the app
 app.whenReady().then(async () => {
     logStartupEvent("App ready")
@@ -1217,27 +1186,12 @@ app.whenReady().then(async () => {
     }
     logger.settings.info("Loaded", denshiSettings)
 
-    let currentUpdateChannel = denshiSettings.updateChannel
-    const { ok, fallback } = await fetchGithubStatus()
-    // if github is down, use fallback channel
-    if (!ok) {
-        currentUpdateChannel = fallback
-    }
-
     const updateConfig = {
         provider: "generic" as const,
         url: DEFAULT_UPDATE_FEED_URL,
         channel: "latest",
         allowPrerelease: false,
         verifyUpdateCodeSignature: false,
-    }
-
-    if (currentUpdateChannel === "seanime_nightly") {
-        updateConfig.url = "https://seanime.app/api/updates/nightly/"
-        updateConfig.allowPrerelease = true
-    } else if (currentUpdateChannel === "seanime") {
-        updateConfig.url = "https://seanime.app/api/updates/stable/"
-        updateConfig.allowPrerelease = false
     }
 
     updateConfig.url = normalizeUpdateFeedURL(updateConfig.url, DEFAULT_UPDATE_FEED_URL)

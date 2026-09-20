@@ -4103,7 +4103,7 @@ export type Models_LibrarySettings = {
     scannerUseLegacyMatching: boolean
     scannerConfig: string
     /**
-     * "github", "seanime", "seanime_nightly"
+    * "github"
      */
     updateChannel: string
     enableExtensionSecureMode: boolean
