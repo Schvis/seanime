@@ -260,7 +260,7 @@ func (p *Presence) check() (proceed bool) {
 
 var (
 	defaultActivity = discordrpc_client.Activity{
-		Name:    "Seanime",
+		Name:    "anime.schvis.com",
 		Details: "",
 		State:   "",
 		Assets: &discordrpc_client.Assets{
@@ -280,8 +280,8 @@ var (
 		},
 		Buttons: []*discordrpc_client.Button{
 			{
-				Label: "Seanime",
-				Url:   "https://seanime.app",
+				Label: "Anime",
+				Url:   "https://anime.schvis.com",
 			},
 		},
 		Instance:          true,
